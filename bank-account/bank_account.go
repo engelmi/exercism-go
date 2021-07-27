@@ -6,7 +6,7 @@ type Account struct {
 	closed bool
 
 	currentBalance int64
-	syncMutex      *sync.Mutex
+	sync.Mutex
 }
 
 func Open(initialBalance int64) *Account {
@@ -17,47 +17,44 @@ func Open(initialBalance int64) *Account {
 	acc := &Account{
 		closed:         false,
 		currentBalance: initialBalance,
-		syncMutex:      &sync.Mutex{},
+		Mutex:          sync.Mutex{},
 	}
 
 	return acc
 }
 
 func (acc *Account) Deposit(amount int64) (int64, bool) {
-	acc.syncMutex.Lock()
+	acc.Lock()
+	defer acc.Unlock()
+
 	if acc.closed {
-		acc.syncMutex.Unlock()
-		return 0, false
+		return acc.currentBalance, !acc.closed
 	}
-	balance := acc.currentBalance + amount
-	if balance < 0 {
-		acc.syncMutex.Unlock()
-		return 0, false
+
+	newBalance := acc.currentBalance + amount
+	newBalanceOk := newBalance >= 0
+	if newBalanceOk {
+		acc.currentBalance = newBalance
 	}
-	acc.currentBalance = balance
-	acc.syncMutex.Unlock()
-	return balance, true
+
+	return acc.currentBalance, !acc.closed && newBalanceOk
 }
 
 func (acc *Account) Balance() (int64, bool) {
-	acc.syncMutex.Lock()
-	if acc.closed {
-		acc.syncMutex.Unlock()
-		return 0, false
-	}
-	balance := acc.currentBalance
-	acc.syncMutex.Unlock()
-	return balance, true
+	return acc.currentBalance, !acc.closed
 }
 
 func (acc *Account) Close() (int64, bool) {
-	acc.syncMutex.Lock()
+	acc.Lock()
+	defer acc.Unlock()
+
 	if acc.closed {
-		acc.syncMutex.Unlock()
 		return 0, false
 	}
+
 	acc.closed = true
-	balance := acc.currentBalance
-	acc.syncMutex.Unlock()
-	return balance, true
+	payout := acc.currentBalance
+	acc.currentBalance = 0
+
+	return payout, true
 }
